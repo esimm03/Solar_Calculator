@@ -18,7 +18,7 @@ Install the required libraries using pip:
 "pip install geopandas shapely numpy"
 
 **Usage**
-Run the Script: Execute the Python script in your terminal or command prompt.
+Run the Script: Execute the Python script in your terminal or command prompt. Before usage, please hardcode a desired output path on line 13.
 
 **Provide Inputs:**
 Enter the path to the shapefile when prompted.
