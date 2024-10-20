@@ -50,4 +50,4 @@ This project is licensed under the MIT License. Feel free to modify and use the 
 
 **Acknowledgments**
 This README was developed with the assistance of ChatGPT, an AI language model by OpenAI. (https://chatgpt.com/)
-CITATION.cff
+
