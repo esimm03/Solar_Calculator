@@ -1,0 +1,155 @@
+import geopandas as gpd
+from shapely.geometry import Polygon
+import numpy as np
+import os
+import sys
+
+# Define inputs
+print("***Welcome To the Panel Calculator, Have Fun!***")
+print("***REMEMBER: INPUT SHAPEFILE WITH ***")
+shapefile = input(r"Enter the path to the shapefile to be analyzed: ")
+
+# Hardcode the output folder path
+output_folder = r"G:\My Drive\Academic\Loughborough\Year 4\Dissertation\Geospatial study\Generated_Panel_Config"
+
+# Check if the input shapefile path exists
+if not os.path.exists(shapefile):
+    print(f"Error: {shapefile} does not exist. Please check the path and try again.")
+    sys.exit(1)  # Exit if the shapefile doesn't exist
+
+print(f"Shapefile to analyze: {shapefile}")  # Confirm the input received
+
+# Define other variables**************************************************
+# Prompt the user to enter the dimensions of a single solar panel
+panel_length = float(input("Enter the length of one panel (in meters): "))
+panel_width = float(input("Enter the width of one panel (in meters): "))
+solar_panel_dim = (panel_length, panel_width)  # dimensions of one panel (in Meters)
+panel_spacing = 0.5            # space between panels (in meters)
+buffer_zone = 0.5           # distance from edge of Reservoir (in meters)
+coverage_percentage = 100    # percentage of reservoir to cover with panels
+energy_output_per_panel = 145 # in watt hours (adjust based on the panel's spec in one standard hour at full production)
+cost_per_panel = float(input("Enter the cost per panel/block of panels (in currency, without currency symbol, or commas): "))  # cost per panel/block
+#**************************************************************************************************
+
+def calculate_solar_panels(shapefile, output_folder, coverage_percentage, solar_panel_dim, panel_spacing, buffer_zone, energy_output_per_panel, cost_per_panel):
+    try:
+        # Display the current status
+        print(f"Processing file: {shapefile}...")
+
+        # Read the input shapefile
+        gdf = gpd.read_file(shapefile)
+        if gdf.empty:
+            print(f"Error: {shapefile} contains no valid geometries. Skipping...")
+            return 0, 0, 0  # Return counts as 0 if the GeoDataFrame is empty
+
+        print(f"Loaded shapefile: {shapefile}. Calculating usable area...")
+
+        # Initialize list for storing panel polygons
+        panel_geometries = []
+        panel_count = 0
+        total_area_covered = 0
+
+        for index, reservoir in gdf.iterrows():
+            try:
+                # Calculate usable area: total area minus buffer zone
+                usable_area = reservoir.geometry.buffer(-buffer_zone)
+
+                # Check if usable_area is valid
+                if usable_area.is_empty:
+                    print(f"Error: Reservoir {index+1} has no usable area after applying the buffer zone. Skipping...")
+                    continue
+
+                # Calculate total area eligible for panels
+                eligible_area = usable_area.area * (coverage_percentage / 100)
+
+                print(f"Reservoir {index+1}: Eligible area calculated. Placing panels...")
+
+                # Create grid for panel placement (without slanting or rotating)
+                minx, miny, maxx, maxy = usable_area.bounds
+                if minx >= maxx or miny >= maxy:
+                    print(f"Error: Invalid bounds for reservoir {index+1}. Skipping...")
+                    continue
+
+                # Create a grid for horizontal panel placement
+                x_coords = np.arange(minx, maxx, solar_panel_dim[0] + panel_spacing)
+                y_coords = np.arange(miny, maxy, solar_panel_dim[1] + panel_spacing)
+
+                # Try placing panels without rotation
+                for x in x_coords:
+                    for y in y_coords:
+                        # Print values to debug
+                        print(f"x: {x}, y: {y}, panel width: {solar_panel_dim[0]}, panel height: {solar_panel_dim[1]}")
+
+                        # Try the horizontal orientation first
+                        horizontal_panel = Polygon([
+                            (x, y),
+                            (x + solar_panel_dim[0], y),
+                            (x + solar_panel_dim[0], y + solar_panel_dim[1]),
+                            (x, y + solar_panel_dim[1])
+                        ])
+
+                        # If it fits in the usable area, add it to the list
+                        if horizontal_panel.intersects(usable_area) and usable_area.contains(horizontal_panel):
+                            # Ensure no overlap and maintain spacing
+                            if not any(existing_panel.intersects(horizontal_panel) for existing_panel in panel_geometries):
+                                panel_geometries.append(horizontal_panel)
+                                panel_count += 1
+                                total_area_covered += horizontal_panel.area
+
+                        # If it doesn't fit horizontally, try the vertical orientation
+                        else:
+                            vertical_panel = Polygon([
+                                (x, y),
+                                (x + solar_panel_dim[1], y),
+                                (x + solar_panel_dim[1], y + solar_panel_dim[0]),
+                                (x, y + solar_panel_dim[0])
+                            ])
+                            # Check fit in the usable area
+                            if vertical_panel.intersects(usable_area) and usable_area.contains(vertical_panel):
+                                if not any(existing_panel.intersects(vertical_panel) for existing_panel in panel_geometries):
+                                    panel_geometries.append(vertical_panel)
+                                    panel_count += 1
+                                    total_area_covered += vertical_panel.area
+
+                # Calculate total energy output
+                total_output = panel_count * energy_output_per_panel / 1000  # Convert to kWh
+
+                # Calculate total cost of the array
+                total_cost = panel_count * cost_per_panel
+
+                # Output progress
+                print(f"  Panels placed: {panel_count}")
+                print(f"  Total area covered: {total_area_covered:.2f} sq.m")
+                print(f"  Estimated total energy output: {total_output:.2f} kWh")
+                print(f"  Total cost of array: {total_cost:.2f} currency")
+                print("Please view new shapefile for reference and layout")
+
+                # Prepare output file path
+                shapefile_name = os.path.basename(shapefile).replace('.shp', '')
+                output_filename = os.path.join(output_folder, f"{shapefile_name}_PANELS.shp")
+
+                # Save the new shapefile
+                output_gdf = gpd.GeoDataFrame(geometry=panel_geometries, crs=gdf.crs)
+                output_gdf.to_file(output_filename)
+
+                print(f"New shapefile created: {output_filename}")
+
+            except Exception as e:
+                print(f"Error processing reservoir {index+1}: {e}")
+
+        return panel_count, total_cost, total_output  # Return total counts and outputs
+
+    except Exception as e:
+        print(f"An error occurred while processing {shapefile}: {e}")
+        sys.exit(1)
+
+# Run the function and get results
+total_panels, total_cost, total_output = calculate_solar_panels(shapefile, output_folder, coverage_percentage, solar_panel_dim, panel_spacing, buffer_zone, energy_output_per_panel, cost_per_panel)
+
+# Conclusion message
+print("#################################################################################################")
+print("The program has now finished generating your panels, please view the shapefile")
+print(f"Total number of panels placed across shapefile: {total_panels}")
+print(f"Total Cost of all the panels: {total_cost:.2f} currency")
+print(f"Total output per panel in kWh: {total_output:.2f} kWh")
+print("Processing completed.")
