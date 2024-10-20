@@ -9,8 +9,8 @@ print("***Welcome To the Panel Calculator, Have Fun!***")
 print("***REMEMBER: INPUT SHAPEFILE WITH ***")
 shapefile = input(r"Enter the path to the shapefile to be analyzed: ")
 
-# Hardcode the output folder path
-output_folder = r"G:\My Drive\Academic\Loughborough\Year 4\Dissertation\Geospatial study\Generated_Panel_Config"
+# Hardcode the output folder path ***PLEASE INPUT YOUR DESIRED PATH***
+output_folder = r"xxxx"
 
 # Check if the input shapefile path exists
 if not os.path.exists(shapefile):
